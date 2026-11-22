@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: should-i-buy-investing
+expected_outcome: |
+  Uses research.py stock for returns, drawdown and position vs the 200-day, plus cited web research on results and valuation, and gives a Consider/Watch/Avoid verdict with low or medium confidence and the case against.

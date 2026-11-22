@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: swing-ideas-for-next-session
+expected_outcome: |
+  Runs a Nifty scan and per-stock plans, checks news and results dates, and gives at most three ideas with entry, stop, target and a size that risks about Rs 2,000 each, plus Watch/Avoid reasons and sources.

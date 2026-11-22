@@ -1,0 +1,16 @@
+{
+  "note": "Example lots. cost is the total paid for the lot in rupees, including brokerage and charges (not STT).",
+  "cash": 25000,
+  "positions": [
+    {"ticker": "RELIANCE", "shares": 30, "lots": [
+      {"id": "RELIANCE-1", "date": "2024-03-01", "shares": 20, "cost": 29000.0},
+      {"id": "RELIANCE-2", "date": "2026-06-10", "shares": 10, "cost": 13000.0}]},
+    {"ticker": "TCS", "shares": 10, "lots": [
+      {"id": "TCS-1", "date": "2023-05-15", "shares": 10, "cost": 33000.0}]},
+    {"ticker": "INFY", "shares": 60, "lots": [
+      {"id": "INFY-1", "date": "2021-08-02", "shares": 40, "cost": 27200.0},
+      {"id": "INFY-2", "date": "2026-02-16", "shares": 20, "cost": 23400.0}]},
+    {"ticker": "HDFCBANK", "shares": 100, "lots": [
+      {"id": "HDFCBANK-1", "date": "2022-11-01", "shares": 100, "cost": 52000.0}]}
+  ]
+}

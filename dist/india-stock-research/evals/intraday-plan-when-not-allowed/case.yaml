@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: intraday-plan-when-not-allowed
+expected_outcome: |
+  Checks the NSE clock, gives next-session levels (previous high/low/close, pivots) and what would trigger a trade, warns about intraday risk, and does not write MIS orders because intraday is not enabled.

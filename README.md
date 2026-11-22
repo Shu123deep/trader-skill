@@ -212,6 +212,14 @@ What to know before you rely on it:
 - The shareholding filings include holders' PANs; the tool drops them while
   parsing and never stores them.
 
+**One installable skill.** `dist/india-stock-research.skill` packs the India
+edition into a single Claude skill: the research method in one `SKILL.md`,
+all the tools in `scripts/` and their docs in `references/`. Upload it in
+Claude (Settings > Capabilities > Skills), or unzip it into
+`~/.claude/skills/` for Claude Code. Its source, with test cases in
+`evals/`, is `dist/india-stock-research/`. It needs network access to
+`nsearchives.nseindia.com` and `query1.finance.yahoo.com`.
+
 The India tests run offline on files saved from NSE and Yahoo on
 22 Nov 2026: bhavcopies (including a holiday file that holds the previous
 day's prices), NSE's equity list, bulk and block deals, the RSS feeds, and a
