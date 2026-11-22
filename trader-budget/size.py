@@ -304,10 +304,10 @@ def size(rows, cfg, budget=None, prices=None, whole=None, cents=False, top=None)
             break
         worst = min(small, key=lambda r: (r["source_weight"], r["ticker"]))
         if whole and shares is not None and shares[worst["ticker"]] == 0 and prices.get(worst["ticker"], 0) > 0:
-            reason = ("one share costs $%s, more than its slice; it cannot be bought in whole shares"
+            reason = ("one share costs " + CURRENCY + "%s, more than its slice; it cannot be bought in whole shares"
                       % _num(prices[worst["ticker"]]))
         else:
-            reason = "its slice ($%s) is under your $%s minimum order" % (
+            reason = ("its slice (" + CURRENCY + "%s) is under your " + CURRENCY + "%s minimum order") % (
                 _num(dollars[worst["ticker"]]), _num(min_order))
         dropped.append({"ticker": worst["ticker"], "reason": reason})
         keep = [r for r in keep if r["ticker"] != worst["ticker"]]
@@ -386,11 +386,14 @@ def write_orders(path, orders, result, cfg, source=""):
 
 # ---------------------------------------------------------------- report
 
+CURRENCY = "$"   # "\u20b9" when trader/config.json has "currency": "INR" (trader-in-* skills)
+
+
 def money(x):
     x = float(x)
     if abs(x - round(x)) < 0.005:
-        return "$" + "{:,.0f}".format(round(x))
-    return "$" + "{:,.2f}".format(x)
+        return CURRENCY + "{:,.0f}".format(round(x))
+    return CURRENCY + "{:,.2f}".format(x)
 
 
 def report(result, orders, source=""):
@@ -425,12 +428,15 @@ def report(result, orders, source=""):
     for d in r["dropped"]:
         lines.append("Dropped %s: %s" % (d["ticker"], d["reason"]))
     lines.append("")
-    lines.append("Proposed orders (place_stock_order arguments, nothing has been placed):")
+    india = CURRENCY == "\u20b9"
+    lines.append("Proposed orders (%s, nothing has been placed):"
+                 % ("whole shares, for trader-in-risk" if india else "place_stock_order arguments"))
     for o in orders:
         amount = ("notional \"%s\"" % o["notional"]) if "notional" in o else ("qty \"%s\"" % o["qty"])
         lines.append("  %s %s %s, %s, %s" % (o["side"], o["symbol"], amount, o["type"], o["time_in_force"]))
     lines.append("")
-    lines.append("Next: trader-risk checks every order, then trader-broker asks you yes or no for each one.")
+    lines.append("Next: %s checks every order, then %s asks you yes or no for each one."
+                 % (("trader-in-risk", "trader-in-broker") if india else ("trader-risk", "trader-broker")))
     lines.append("Education and tooling, not financial advice.")
     return "\n".join(lines)
 
@@ -459,6 +465,8 @@ def main(argv=None):
             rows = parse_weights(data)
             if isinstance(data, dict):
                 source = data.get("source", "")
+        global CURRENCY
+        CURRENCY = "\u20b9" if str(cfg.get("currency", "")).upper() == "INR" else "$"
         prices = load_prices(a.prices)
         if not prices and os.path.exists("trader/prices.json") and not a.prices:
             prices = load_prices("trader/prices.json")

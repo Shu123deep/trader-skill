@@ -134,6 +134,78 @@ The tests run offline, on small fixtures cut from the real filings: Berkshire's
 Q1 and Q2 2026 information tables, the House Clerk's 2026 index, real PTR text,
 real XBRL facts and feeds.
 
+## India edition
+
+Seven more skills, prefixed `trader-in-`, for NSE and BSE stocks: rupees,
+whole shares, the NSE calendar, Indian filings and Indian tax rules. The US
+skills above read SEC and US Congress data, which says nothing about Indian
+companies, so the India edition reads NSE's own public archive instead. No
+login, no API key, no scraping of paid sites.
+
+| command | replaces | what it does |
+| --- | --- | --- |
+| `/trader-in-copycat` | trader-copycat | Reads quarterly shareholding-pattern filings (every holder over 1%), shows who owns a stock and what changed, and rebuilds a superstar investor's portfolio as weights. |
+| `/trader-in-deals` | trader-pelosi | NSE's daily bulk and block deals, same-day churn hidden, alerts once per new deal by a watched investor or in a stock you hold. |
+| `/trader-in-news` | trader-news | NSE corporate announcements, results, board meetings and corporate actions (dividends, splits, bonuses) for your symbols, with red flags marked. |
+| `/trader-in-alerts` | trader-alerts | NSE clock (09:15 to 15:30 IST, 2026 holidays from NSE's circular), symbol and ISIN lookup, rupee quotes from Yahoo `.NS` or NSE's official bhavcopy, price alerts. |
+| `/trader-in-risk` | trader-risk | Whole shares only, real NSE symbols, delivery (CNC) not intraday, no F&O, no shorting, rupee limits, cash buffer after STT, stamp duty and other charges. |
+| `/trader-in-broker` | trader-broker | Tickets and your explicit yes per order. You place it in your broker's app (Indian brokers have no paper trading), or Claude calls a Zerodha Kite connector with Kite Connect's arguments. |
+| `/trader-in-tax` | trader-tax | FIFO lots, STCG 20% / LTCG 12.5% at 12 months, the Rs 1.25 lakh exemption, set-off and carry forward, grandfathering, tax-loss and tax-gain harvesting before 31 March. |
+
+`/trader-budget` and `/trader-rebalance` work for India as they are: put
+`"currency": "INR"` in `trader/config.json` and size with `--whole-shares`.
+`/trader-analyst` and `/trader-screener` read SEC data and stay US-only.
+
+```
+in-copycat / in-deals -> budget --whole-shares -> in-risk -> in-broker   (copy an investor)
+in-news / in-deals / in-alerts                                          (watch, on a schedule)
+in-tax harvest -> in-risk -> in-broker                                   (before 31 March)
+```
+
+A `trader/config.json` for India:
+
+```json
+{"market": "IN", "currency": "INR", "budget": 100000, "cash_buffer_pct": 10,
+ "max_position_pct": 25, "max_order_inr": 50000, "min_order_inr": 500,
+ "max_orders_per_day": 10, "fractional": false, "broker": "manual",
+ "allow_fno": false, "allow_intraday": false}
+```
+
+```bash
+python3 trader-in-alerts/nse.py clock                       # NSE open or closed, next holiday
+python3 trader-in-alerts/nse.py quote RELIANCE TCS --write  # rupee prices -> trader/prices.json
+python3 trader-in-deals/deals.py today                      # the day's bulk and block deals
+python3 trader-in-copycat/shp.py collect                    # new shareholding filings into the library
+python3 trader-in-copycat/shp.py investor kacholia --write  # -> trader/targets.json
+python3 trader-budget/size.py --whole-shares --write        # -> trader/orders.json
+python3 trader-in-risk/check.py                             # PASS / BLOCK per order
+python3 trader-in-broker/ticket.py show                     # the tickets
+python3 trader-in-news/news.py check                        # new filings for what you hold
+python3 trader-in-tax/capgains.py fy                        # this year's gains and tax estimate
+```
+
+What to know before you rely on it:
+
+- **NSE's public archive only.** BSE's API refuses automated requests, so
+  BSE-only companies and BSE-only deals do not appear. NSE's search API needs
+  a browser session, so the copycat works from filings you point it at plus
+  the ones it collects from NSE's RSS feed day by day. It shows only the
+  companies in its library.
+- **The feeds are short.** Bulk and block deals cover the latest day, and the
+  announcements feed the last few hours. Run the watchers on a schedule and
+  their local ledgers become your history.
+- **Real money.** Indian brokers generally have no paper accounts. Start
+  with a small budget and `max_order_inr`.
+- **Tax rules change with each Budget.** The rates are those of the Finance
+  (No. 2) Act, 2024. Check with a chartered accountant.
+- The shareholding filings include holders' PANs; the tool drops them while
+  parsing and never stores them.
+
+The India tests run offline on files saved from NSE and Yahoo on
+22 Nov 2026: bhavcopies (including a holiday file that holds the previous
+day's prices), NSE's equity list, bulk and block deals, the RSS feeds, and a
+shareholding pattern with the PANs removed.
+
 ## Fine print
 
 **Not financial advice.** This is software that reads public data and does
@@ -182,6 +254,13 @@ trader-broker/     SKILL.md, ticket.py, claude_desktop_config.example.json
 trader-tax/        SKILL.md, lots.py, portfolio.example.json
 trader-alerts/     SKILL.md, alerts.py, alerts.example.json
 trader-rebalance/  SKILL.md, rebalance.py
+trader-in-alerts/  SKILL.md, nse.py, alerts.example.json
+trader-in-copycat/ SKILL.md, shp.py, investors.json
+trader-in-deals/   SKILL.md, deals.py, investors.json
+trader-in-news/    SKILL.md, news.py
+trader-in-risk/    SKILL.md, check.py
+trader-in-broker/  SKILL.md, ticket.py
+trader-in-tax/     SKILL.md, capgains.py, portfolio.example.json
 tests/             unittest suite + offline fixtures
 ```
 

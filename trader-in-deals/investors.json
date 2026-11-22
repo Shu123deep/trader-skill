@@ -1,0 +1,17 @@
+{
+  "note": "Well-known Indian investors whose large trades are often disclosed. 'match' lists word sets: a client name matches when it contains every word of one entry. Family members and investment companies file under their own names, so add those you care about in trader/investors.json. Inclusion is not an endorsement.",
+  "investors": [
+    {"name": "Radhakishan Damani", "match": ["RADHAKISHAN DAMANI", "DERIVE TRADING"]},
+    {"name": "Rekha Jhunjhunwala", "match": ["REKHA JHUNJHUNWALA", "RARE ENTERPRISES"]},
+    {"name": "Ashish Kacholia", "match": ["ASHISH KACHOLIA", "BENGAL FINANCE INVESTMENT"]},
+    {"name": "Vijay Kedia", "match": ["VIJAY KEDIA", "VIJAY KISHANLAL KEDIA", "KEDIA SECURITIES"]},
+    {"name": "Mukul Agrawal", "match": ["MUKUL AGRAWAL", "MUKUL MAHAVIR AGRAWAL", "PARAM CAPITAL"]},
+    {"name": "Dolly Khanna", "match": ["DOLLY KHANNA", "DOLLY RAJESH KHANNA"]},
+    {"name": "Sunil Singhania (Abakkus)", "match": ["ABAKKUS", "SUNIL SINGHANIA"]},
+    {"name": "Ashish Dhawan", "match": ["ASHISH DHAWAN"]},
+    {"name": "Porinju Veliyath", "match": ["PORINJU VELIYATH", "EQUITY INTELLIGENCE INDIA"]},
+    {"name": "Nemish Shah", "match": ["NEMISH SHAH"]},
+    {"name": "Madhusudan Kela", "match": ["MADHUSUDAN KELA", "SINGULARITY EQUITY FUND"]},
+    {"name": "Dilipkumar Lakhi", "match": ["DILIPKUMAR LAKHI", "DILIP KUMAR LAKHI"]}
+  ]
+}

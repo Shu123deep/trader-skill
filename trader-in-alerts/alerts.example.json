@@ -1,0 +1,8 @@
+{
+  "rules": [
+    {"id": "opening-bell", "type": "opening_bell"},
+    {"id": "reliance-above-1600", "symbol": "RELIANCE", "type": "above", "price": 1600, "note": "take-profit level"},
+    {"id": "hdfcbank-stop-800", "symbol": "HDFCBANK", "type": "stop", "price": 800, "rearm": true},
+    {"id": "tcs-pct_move-3", "symbol": "TCS", "type": "pct_move", "pct": 3}
+  ]
+}
