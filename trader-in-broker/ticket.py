@@ -81,6 +81,8 @@ def normalise(o):
         "stop_price": _num_str(o.get("stop_price", o.get("trigger_price"))),
         "product": str(o.get("product") or "CNC").strip().upper(),
         "validity": VALIDITY.get(val_in, val_in.upper()),
+        "stop_loss": _num_str(o.get("stop_loss")),
+        "target": _num_str(o.get("target")),
     }
     if out["type"] in ("MARKET", "SL-M"):
         out["limit_price"] = None
@@ -153,6 +155,15 @@ def kite_args(order):
     if o["stop_price"] and o["type"] in ("SL", "SL-M"):
         out["trigger_price"] = float(o["stop_price"])
     return out
+
+
+def stop_order(order):
+    """The protective order to place right after the entry fills, or None."""
+    o = normalise(order)
+    if not o["stop_loss"] or not o["qty"]:
+        return None
+    return {"symbol": o["symbol"], "exchange": o["exchange"], "side": "sell" if o["side"] == "buy" else "buy",
+            "qty": o["qty"], "type": "sl-m", "stop_price": o["stop_loss"], "product": o["product"], "validity": "DAY"}
 
 
 def plain(order):
@@ -268,6 +279,14 @@ def render(order, idx, total, cfg, risk, state, today):
     if rv and rv.get("value_inr"):
         lines.append("  about %s plus about %s statutory charges (before brokerage)"
                      % (inr(rv["value_inr"]), inr(rv.get("est_charges_inr") or 0)))
+    o = normalise(order)
+    if o["stop_loss"]:
+        lines.append("  plan: stop-loss %s%s" % (inr(o["stop_loss"]), (", target " + inr(o["target"])) if o["target"] else ""))
+        if o["product"] == "MIS":
+            lines.append("  right after the fill: %s; square off by 15:15 IST" % plain(stop_order(order)))
+        else:
+            lines.append("  right after the fill: set a GTT (or a daily SL order) to sell at %s; GTTs last up to "
+                         "a year at most brokers, a DAY order expires tonight" % inr(o["stop_loss"]))
     if order.get("why"):
         lines.append("  why: " + order["why"])
     lines.append("  " + label)
@@ -279,6 +298,10 @@ def render(order, idx, total, cfg, risk, state, today):
         lines.append("  After your yes, Claude calls the Kite connector's order tool with exactly:")
         for l in json.dumps(kite_args(order), indent=2).splitlines():
             lines.append("    " + l)
+        if stop_order(order) and normalise(order)["product"] == "MIS":
+            lines.append("  and, once it fills (a second yes), the stop-loss:")
+            for l in json.dumps(kite_args(stop_order(order)), indent=2).splitlines():
+                lines.append("    " + l)
     elif broker == "ibkr":
         lines.append("  Claude drafts this with the Interactive Brokers connector; it goes to the market only")
         lines.append("  after you approve it in your IBKR account.")
@@ -294,7 +317,8 @@ def ticket_json(order, idx, cfg, risk, state, today):
     ready, label, rv = status_of(order, risk, state, today)
     return {"index": idx, "ready": ready, "status": label, "plain": plain(order), "fingerprint": fingerprint(order),
             "broker": broker_of(cfg), "kite_args": kite_args(order), "why": order.get("why", ""),
-            "value_inr": (rv or {}).get("value_inr"), "est_charges_inr": (rv or {}).get("est_charges_inr")}
+            "value_inr": (rv or {}).get("value_inr"), "est_charges_inr": (rv or {}).get("est_charges_inr"),
+            "stop_order": stop_order(order), "stop_kite_args": kite_args(stop_order(order)) if stop_order(order) else None}
 
 
 # ------------------------------------------------ fills -> lots

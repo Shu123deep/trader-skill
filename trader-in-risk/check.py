@@ -56,7 +56,8 @@ import sys
 DEFAULTS = {
     "budget": None, "cash_buffer_pct": 10, "max_position_pct": 25, "max_order_inr": 100000,
     "min_order_inr": 500, "max_orders_per_day": 10, "blocked": [], "allow_fno": False,
-    "allow_intraday": False,
+    "allow_intraday": False, "allow_short_intraday": False, "risk_per_trade_pct": None,
+    "intraday_risk_pct": 0.5,
 }
 SYMBOL = re.compile(r"^[A-Z0-9][A-Z0-9&\-]{0,19}$")
 FNO = re.compile(r"^[A-Z&\-]+\d{2}[A-Z]{3}(\d+(\.\d+)?(CE|PE)|FUT)$|^[A-Z&\-]+\d{2}[A-Z0-9]{1,3}\d{2}\d+(CE|PE)$")
@@ -100,6 +101,8 @@ def normalise(o):
         "stop_price": _num_str(o.get("stop_price", o.get("trigger_price"))),
         "product": str(o.get("product") or "CNC").strip().upper(),
         "validity": VALIDITY.get(val_in, val_in.upper()),
+        "stop_loss": _num_str(o.get("stop_loss")),
+        "target": _num_str(o.get("target")),
     }
     if out["type"] in ("MARKET", "SL-M"):
         out["limit_price"] = None
@@ -148,14 +151,18 @@ def inr(x):
     return "%s₹%s%s" % (sign, whole, "" if frac == "00" else "." + frac)
 
 
-def charges(value, side):
-    """Approximate statutory charges in rupees for an equity delivery trade."""
+def charges(value, side, product="CNC"):
+    """Approximate statutory charges in rupees for one leg of an equity trade.
+    Delivery (CNC): STT 0.1% both sides, stamp 0.015% on the buy.
+    Intraday (MIS): STT 0.025% on the sell only, stamp 0.003% on the buy."""
     if not value:
         return 0.0
-    c = value * CHARGES["stt"] + value * CHARGES["exchange"] + value * CHARGES["sebi"]
-    c += (value * CHARGES["exchange"] + value * CHARGES["sebi"]) * CHARGES["gst"]
-    if side == "buy":
-        c += value * CHARGES["stamp_buy"]
+    c = value * CHARGES["exchange"] + value * CHARGES["sebi"]
+    c += c * CHARGES["gst"]
+    if product == "MIS":
+        c += value * 0.00025 if side == "sell" else value * 0.00003
+    else:
+        c += value * CHARGES["stt"] + (value * CHARGES["stamp_buy"] if side == "buy" else 0.0)
     return round(c, 2)
 
 
@@ -276,7 +283,8 @@ def check(orders, cfg, portfolio=None, prices=None, state=None, today=None, equi
                 reasons.append("product: MIS is intraday (squared off the same day, with leverage); this pack "
                                "buys for delivery (CNC) unless \"allow_intraday\": true")
             else:
-                warns.append("intraday (MIS): the broker squares it off before the close")
+                warns.append("intraday (MIS): place the stop-loss right after the fill; the broker squares it off "
+                             "around 15:15-15:20, with an extra charge")
         elif o["product"] != "CNC":
             reasons.append("product: %s is not delivery (CNC); NRML/MTF use leverage or F&O" % o["product"])
 
@@ -303,7 +311,29 @@ def check(orders, cfg, portfolio=None, prices=None, state=None, today=None, equi
         if typ == "MARKET" and not any(w.startswith("market orders") for w in top_warn):
             top_warn.append("market orders: in a thinly traded stock one can fill well away from the last "
                             "price; a limit order caps the price")
-        est = charges(value, side) if value else 0.0
+        est = charges(value, side, o["product"]) if value else 0.0
+        mis = o["product"] == "MIS"
+
+        # the plan: a stop-loss on the right side, and the loss at the stop within your risk budget
+        sl, tgt = _f(o["stop_loss"]), _f(o["target"])
+        entry = ref
+        if mis and sl is None:
+            reasons.append("plan: every intraday (MIS) order needs a stop_loss; trader-in-research adds one")
+        if sl is not None and entry:
+            if (side == "buy" and sl >= entry) or (side == "sell" and sl <= entry):
+                reasons.append("plan: the stop_loss %s is on the wrong side of the entry %s" % (inr(sl), inr(entry)))
+            elif q:
+                at_risk = q * abs(entry - sl)
+                total_now = acct["cash"] + sum(acct["values"].values())
+                pct = c.get("intraday_risk_pct") if mis else c.get("risk_per_trade_pct")
+                if pct and total_now > 0 and at_risk > total_now * float(pct) / 100.0 * 1.05:
+                    reasons.append("plan: losing %s at the stop is %.2f%% of the account, over your %s%% %s risk "
+                                   "per trade" % (inr(at_risk), 100.0 * at_risk / total_now, _pct(pct),
+                                                  "intraday" if mis else "swing"))
+                if tgt is not None and abs(entry - sl) > 0:
+                    rr = abs(tgt - entry) / abs(entry - sl)
+                    if rr < 1.5:
+                        warns.append("target is only %.1fx the risk: after charges that is a thin edge" % rr)
 
         if value is not None:
             mn, mx = _f(c.get("min_order_inr")) or 0, _f(c.get("max_order_inr"))
@@ -329,7 +359,11 @@ def check(orders, cfg, portfolio=None, prices=None, state=None, today=None, equi
                 reasons.append("position: %s would be %s, %.1f%% of the %s account, over your %s%% cap"
                                % (sym, inr(held_value + value), 100.0 * (held_value + value) / total, inr(total),
                                   _pct(c["max_position_pct"])))
-        if side == "sell" and sym and q:
+        if side == "sell" and sym and q and mis and c.get("allow_intraday") and c.get("allow_short_intraday"):
+            if q > held + 1e-9:
+                warns.append("intraday short: it must be bought back before the close; the broker squares it off "
+                             "around 15:15-15:20, and a stock stuck at its upper circuit cannot be bought back")
+        elif side == "sell" and sym and q:
             if q > held + 1e-9:
                 reasons.append("short: selling %s %s but you hold %s; short selling in delivery is not possible"
                                % (o["qty"], sym, _pct(held)))

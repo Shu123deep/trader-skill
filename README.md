@@ -136,7 +136,7 @@ real XBRL facts and feeds.
 
 ## India edition
 
-Seven more skills, prefixed `trader-in-`, for NSE and BSE stocks: rupees,
+Eight more skills, prefixed `trader-in-`, for NSE and BSE stocks: rupees,
 whole shares, the NSE calendar, Indian filings and Indian tax rules. The US
 skills above read SEC and US Congress data, which says nothing about Indian
 companies, so the India edition reads NSE's own public archive instead. No
@@ -144,6 +144,7 @@ login, no API key, no scraping of paid sites.
 
 | command | replaces | what it does |
 | --- | --- | --- |
+| `/trader-in-research` | trader-analyst + trader-screener | Ask for a suggestion and it does the research: intraday (opening range, VWAP, pivots), swing (trend, RSI, ATR, breakouts and pullbacks, strength against the Nifty, Nifty 50/100/500 scans) or investing, plus filings, deals, shareholding and your portfolio. At most three ideas, each with entry, stop-loss, target, size from your risk budget, and the case against. |
 | `/trader-in-copycat` | trader-copycat | Reads quarterly shareholding-pattern filings (every holder over 1%), shows who owns a stock and what changed, and rebuilds a superstar investor's portfolio as weights. |
 | `/trader-in-deals` | trader-pelosi | NSE's daily bulk and block deals, same-day churn hidden, alerts once per new deal by a watched investor or in a stock you hold. |
 | `/trader-in-news` | trader-news | NSE corporate announcements, results, board meetings and corporate actions (dividends, splits, bonuses) for your symbols, with red flags marked. |
@@ -157,6 +158,7 @@ login, no API key, no scraping of paid sites.
 `/trader-analyst` and `/trader-screener` read SEC data and stay US-only.
 
 ```
+in-research -> in-risk -> in-broker                                     (ask for a suggestion: intraday, swing, invest)
 in-copycat / in-deals -> budget --whole-shares -> in-risk -> in-broker   (copy an investor)
 in-news / in-deals / in-alerts                                          (watch, on a schedule)
 in-tax harvest -> in-risk -> in-broker                                   (before 31 March)
@@ -172,6 +174,9 @@ A `trader/config.json` for India:
 ```
 
 ```bash
+python3 trader-in-research/research.py scan --universe nifty100   # swing setups, ranked
+python3 trader-in-research/research.py swing GRASIM               # entry, stop, target, size
+python3 trader-in-research/research.py intraday HDFCBANK          # levels; live setup after 09:30
 python3 trader-in-alerts/nse.py clock                       # NSE open or closed, next holiday
 python3 trader-in-alerts/nse.py quote RELIANCE TCS --write  # rupee prices -> trader/prices.json
 python3 trader-in-deals/deals.py today                      # the day's bulk and block deals
@@ -194,6 +199,12 @@ What to know before you rely on it:
 - **The feeds are short.** Bulk and block deals cover the latest day, and the
   announcements feed the last few hours. Run the watchers on a schedule and
   their local ledgers become your history.
+- **Short-term trading is where most people lose.** SEBI found 71% of
+  individual intraday traders in the cash segment lost money in FY 2022-23.
+  Intraday is off until you set `"allow_intraday": true`; every intraday order
+  needs a stop-loss and fits your per-trade risk, or trader-in-risk blocks it.
+  Yahoo's 5-minute bars are about 15 minutes delayed: treat them as levels to
+  watch on your broker's live chart.
 - **Real money.** Indian brokers generally have no paper accounts. Start
   with a small budget and `max_order_inr`.
 - **Tax rules change with each Budget.** The rates are those of the Finance
@@ -254,6 +265,7 @@ trader-broker/     SKILL.md, ticket.py, claude_desktop_config.example.json
 trader-tax/        SKILL.md, lots.py, portfolio.example.json
 trader-alerts/     SKILL.md, alerts.py, alerts.example.json
 trader-rebalance/  SKILL.md, rebalance.py
+trader-in-research/ SKILL.md, research.py
 trader-in-alerts/  SKILL.md, nse.py, alerts.example.json
 trader-in-copycat/ SKILL.md, shp.py, investors.json
 trader-in-deals/   SKILL.md, deals.py, investors.json

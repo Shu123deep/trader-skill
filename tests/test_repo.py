@@ -10,7 +10,7 @@ SKILLS = ["trader-copycat", "trader-news", "trader-budget", "trader-pelosi", "tr
           "trader-rebalance"]
 # the India edition: NSE / BSE, rupees, Indian tax rules
 INDIA = ["trader-in-alerts", "trader-in-copycat", "trader-in-deals", "trader-in-news", "trader-in-risk",
-         "trader-in-broker", "trader-in-tax"]
+         "trader-in-broker", "trader-in-tax", "trader-in-research"]
 SKILLS = SKILLS + INDIA
 ABOUT = ("11 Claude skills that copy the investors you trust, watch the news and Congress, size every "
          "trade to your budget, and never place an order without your yes.")

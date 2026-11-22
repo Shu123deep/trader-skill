@@ -18,6 +18,8 @@ shp = load("trader-in-copycat", "shp")
 news = load("trader-in-news", "news")
 risk = load("trader-in-risk", "check")
 broker = load("trader-in-broker", "ticket")
+research = load("trader-in-research", "research")
+RS = os.path.join(FIX, "trader-in-research")
 
 D = datetime.date
 AL = os.path.join(FIX, "trader-in-alerts")
@@ -391,6 +393,92 @@ class RiskAndBroker(unittest.TestCase):
             self.assertEqual(again["results"][0]["verdict"], "BLOCK")
         finally:
             shutil.rmtree(d)
+
+
+
+class Research(unittest.TestCase):
+    def bars(self, sym, iv):
+        return research.chart(sym, "1y", iv, RS)
+
+    def test_indicators(self):
+        up = list(range(1, 40))
+        self.assertEqual(research.rsi(up), 100.0)
+        self.assertEqual(research.sma([1, 2, 3, 4], 2), 3.5)
+        self.assertAlmostEqual(research.max_drawdown([100, 120, 90, 130]), -25.0)
+        self.assertEqual(research.tick(1234.567), 1234.55)
+        self.assertEqual(research.pivots(110, 90, 100)["R1"], 110)
+
+    def test_swing_pullback_plan_on_grasim(self):
+        r = research.swing_analysis(self.bars("GRASIM", "1d"), self.bars("^NSEI", "1d"))
+        p = r["plan"]
+        self.assertEqual(p["setup"], "pullback in an uptrend")
+        self.assertEqual((p["entry"], p["stop"], p["target"]), (3103.7, 2991.75, 3327.6))
+        self.assertEqual(r["facts"]["trend"], "up")
+        self.assertLess(r["facts"]["rs_vs_nifty_3m"], 0)        # weaker than the Nifty: the answer must say so
+
+    def test_extended_breakout_is_skipped(self):
+        r = research.swing_analysis(self.bars("HDFCBANK", "1d"), self.bars("^NSEI", "1d"))
+        self.assertIsNone(r["plan"])
+        self.assertTrue(any("extended" in n for n in r["notes"]))
+
+    def test_intraday_replay_has_no_look_ahead(self):
+        b5, d = self.bars("HDFCBANK", "5m"), self.bars("HDFCBANK", "1d")
+        at = lambda hm: research.intraday_analysis(b5, d, datetime.datetime(2026, 11, 20, *hm))
+        early = at((9, 25))
+        self.assertEqual(early["mode"], "live session")
+        self.assertIsNone(early["plan"])
+        self.assertEqual(early["as_of"], "09:20 IST")
+        mid = at((10, 30))["plan"]
+        self.assertEqual((mid["side"], mid["entry"], mid["stop"], mid["target"]), ("buy", 830.75, 825.95, 840.35))
+        late = at((14, 45))
+        self.assertIsNone(late["plan"])
+        self.assertTrue(any("14:30" in n for n in late["notes"]))
+        nxt = research.intraday_analysis(b5, d, datetime.datetime(2026, 11, 22, 20, 0))
+        self.assertEqual(nxt["mode"], "plan for the next session")
+        self.assertEqual(nxt["levels"]["prev_close"], 846.0)
+
+    def test_risk_sizing(self):
+        s = research.size(3103.7, 2991.75, 200000, 200000, 1.0, 25)
+        self.assertEqual((s["qty"], s["limited_by"]), (16, "position cap"))
+        s = research.size(3103.7, 2991.75, 200000, 200000, 1.0, 100)
+        self.assertEqual((s["qty"], s["limited_by"]), (17, "risk"))
+        self.assertLessEqual(s["risk_inr"], 2000)
+        self.assertEqual(research.size(100, 50, 1000, 1000, 1.0, 25)["qty"], 0)
+        self.assertGreater(research.intraday_charges(50000), 0)
+
+    def test_index_list_has_industries(self):
+        names = research.index_list("nifty50", RS)
+        self.assertEqual(len(names), 50)
+        self.assertEqual(names["GRASIM"], "Construction Materials")
+
+    def test_risk_enforces_the_plan(self):
+        cfg = {"budget": 200000, "max_position_pct": 100, "max_order_inr": 500000, "risk_per_trade_pct": 1,
+               "allow_intraday": True, "allow_short_intraday": True, "cash_buffer_pct": 0}
+        prices = {"GRASIM": 3103.7, "INFY": 1098, "RELIANCE": 1360}
+        orders = [{"symbol": "GRASIM", "side": "buy", "qty": "40", "type": "limit", "limit_price": "3103.70",
+                   "stop_loss": "2991.75"},
+                  {"symbol": "GRASIM", "side": "sell", "qty": "1", "type": "limit", "limit_price": "3103.70",
+                   "stop_loss": "3000", "product": "MIS"},
+                  {"symbol": "INFY", "side": "buy", "qty": "10", "type": "limit", "limit_price": "1098", "product": "MIS"},
+                  {"symbol": "RELIANCE", "side": "sell", "qty": "10", "type": "limit", "limit_price": "1360",
+                   "product": "MIS", "stop_loss": "1368"}]
+        res = risk.check(orders, cfg, None, prices, None, "2026-11-23")
+        r = res["results"]
+        self.assertTrue(any("risk per trade" in x for x in r[0]["reasons"]))
+        self.assertTrue(any("wrong side" in x for x in r[1]["reasons"]))
+        self.assertTrue(any("needs a stop_loss" in x for x in r[2]["reasons"]))
+        self.assertEqual(r[3]["verdict"], "PASS")                # an intraday short, allowed by the config
+        self.assertLess(risk.charges(10000, "buy", "MIS"), risk.charges(10000, "buy", "CNC"))
+
+    def test_ticket_shows_the_protective_stop(self):
+        o = {"symbol": "HDFCBANK", "side": "buy", "qty": "60", "type": "limit", "limit_price": "830.75",
+             "product": "MIS", "stop_loss": "825.95", "target": "840.35"}
+        st = broker.stop_order(o)
+        self.assertEqual((st["side"], st["type"], st["stop_price"], st["product"]), ("sell", "sl-m", "825.95", "MIS"))
+        self.assertEqual(broker.kite_args(st)["order_type"], "SL-M")
+        self.assertNotEqual(broker.fingerprint(o), broker.fingerprint(dict(o, stop_loss="820")))
+        plain = {"symbol": "RELIANCE", "side": "buy", "qty": "20", "type": "market", "time_in_force": "day"}
+        self.assertEqual(risk.fingerprint(plain), broker.fingerprint(plain))
 
 
 if __name__ == "__main__":
